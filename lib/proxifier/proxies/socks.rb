@@ -26,12 +26,12 @@ module Proxifier
         case method
         when 0x00 # NO AUTHENTICATION REQUIRED
         when 0x02 # USERNAME/PASSWORD
-          user &&= user[0, 0xFF]
-          password &&= password[0, 0xFF]
+          user = url.user && url.user[0, 0xFF]
+          password = url.password && url.password[0, 0xFF]
 
-          socket << [user.size, user, password.size, password].pack("CA#{user.size}CA#{password.size}")
+          socket << [1, user.size, user, password.size, password].pack("CA#{user.size}CA#{password.size}")
           version, status = socket.read(2).unpack("CC")
-          check_version(version)
+          check_version(version, 1)
 
           case status
             when 0x00 # SUCCESS
@@ -44,8 +44,13 @@ module Proxifier
       end
 
       def connect(socket, host, port)
-        host = host[0, 0xFF]
-        socket << [VERSION, 0x01, 0x00, 0x03, host.size, host, port].pack("CCCCCA#{host.size}n")
+        if host.match('[0-9\.]+')
+          ip = host.split('.').map(&:to_i)
+          socket << [VERSION, 0x01, 0x00, 0x01, ip, port].flatten.pack("CCCC#{'C' * ip.length}n")
+        else
+          host = host[0, 0xFF]
+          socket << [VERSION, 0x01, 0x00, 0x04, host.size, host, port].pack("CCCCCA#{host.size}n")
+        end
         version, status, _, type = socket.read(4).unpack("CCCC")
         check_version(version)
 
